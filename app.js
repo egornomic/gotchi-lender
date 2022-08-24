@@ -4,7 +4,7 @@ require('dotenv').config();
 const GAS_SPEED = 'standard'
 
 // Abort the operation if estimated gas exceeds this limit, specified in MATIC
-const GAS_COST_LIMIT_MATIC = 0.25
+const GAS_COST_LIMIT_MATIC = 1
 
 const ABI = require('./abi.js')
 const POLYGON_RPC_HOST = process.env.POLYGON_RPC_HOST || "https://polygon-rpc.com/"
@@ -31,7 +31,8 @@ const REVENUE_TOKENS = [ALCHEMICA_FUD_ADDRESS, ALCHEMICA_FOMO_ADDRESS, ALCHEMICA
 
 const MAX_LENDINGS = 999
 
-const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 2 // 2 minutes
+// const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 2 // 2 minutes
+const MILLISECONDS_BETWEEN_RETRIES = process.env.RELISTING_PERIOD_HRS * 60 * 60 * 1000
 
 
 // cancel only mode - just cancel any current listings matching the config gotchi ids
