@@ -219,22 +219,54 @@ const loop = async () => {
   log(`LENDER_WALLET_ADDRESS=${LENDER_WALLET_ADDRESS}`)
   log(`GOTCHI_IDS=${GOTCHI_IDS}`)
   log(`Getting list of all gotchis owned by ${OWNER_WALLET_ADDRESS}`)
+  /** Get all gotchis owned by address */
   const ownedGotchiIds = await getGotchisByOwner(OWNER_WALLET_ADDRESS).then(getIdsFromGotchis)
   log(`ownedGotchiIds=${ownedGotchiIds}`)
+  /**
+   * Get all lendinded gotchis owned by address.
+   */
   const lendings = await getGotchiLendings(OWNER_WALLET_ADDRESS)
+  /** Get all lendinded gotchis IDs owned by address from lendings */
   const idsOfLoanedGotchis = getGotchiIdsFromLendings(lendings)
   log(`idsOfLoanedGotchis=${idsOfLoanedGotchis}`)
+  /**
+   * Get all listed but not borrowed gotchi IDs by onwer.
+   */
   const idsOfListedGotchis = await getGotchiLendingListings(OWNER_WALLET_ADDRESS).then(getGotchiIdsFromLendings)
   log(`idsOfListedGotchis=${idsOfListedGotchis}`)
+  /**
+   * Gotchi IDs of gotchis that have been borrowed for more than
+   * set loan period taken from lendings.
+   */
   const idsOfGotchisWithLoanPeriodExpired = getGotchiIdsFromLendings(lendings.filter(isLoanPeriodExpired))
   log(`idsOfGotchisWithLoanPeriodExpired=${idsOfGotchisWithLoanPeriodExpired}`)
+  /**
+   * Logging all expired listings.
+   */
   lendings.forEach((l)=>log(`tokenId=${l['erc721TokenId']}, timeAgreed=${l['timeAgreed']}, period=${l['period']}, expireTime=${parseInt(l['timeAgreed']) + parseInt(l['period'])}, now=${Math.floor(Date.now() / 1000)}, expired=${isLoanPeriodExpired(l)}`))
+  /**
+   * Getting IDs of gotchis sitting in walled unlisted. Filtering from
+   * all gotchis owned, excluding already listed gotchi IDs loaned gotchi IDs.
+   */
   const idsOfUnlistedGotchis = ownedGotchiIds.filter((id) => !(idsOfListedGotchis.includes(id)) && !(idsOfLoanedGotchis.includes(id)))
   log(`idsOfUnlistedGotchis=${idsOfUnlistedGotchis}`)
+  /**
+   * List of gotchi IDs that will be relisted.
+   * @TODO Change to all gotchi IDs excluding listed gotchi IDs
+   * but not borrowed.
+   */
   const idsOfGotchisToList = idsOfUnlistedGotchis.filter(isGotchiIDOnLendingList)
   log(`idsOfGotchisToList=${idsOfGotchisToList}`)
+  /**
+   * List of gotchi IDs that hasn't been listed by script
+   * and should be claimed and ended.
+   */
   const idsOfGotchisToClaimAndEnd = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList).filter(gotchiHasntBeenListedByScript)
   log(`idsOfGotchisToClaimAndEnd=${idsOfGotchisToClaimAndEnd}`)
+  /**
+   * List of gotchi IDs that has been listed by script
+   * and should be relisted.
+   */
   const idsOfGotchisToRelist = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList).filter(gotchiHasBeenListedByScript)
   log(`idsOfGotchisToRelist=${idsOfGotchisToRelist}`)
 
