@@ -1,10 +1,11 @@
-require('dotenv').config();
+const CONFIG = process.argv[process.argv.length - 1]
+const SHARES = process.argv[process.argv.length - 2].split(',')
+
+require('dotenv').config({ path: './' + CONFIG });
+const { EmbedBuilder, WebhookClient } = require('discord.js');
 
 // Can be 'safeLow', 'standard', or 'fast' - see: https://gasstation-mainnet.matic.network/v2
 const GAS_SPEED = 'standard'
-
-// Abort the operation if estimated gas exceeds this limit, specified in MATIC
-const GAS_COST_LIMIT_MATIC = 1
 
 const ABI = require('./abi.js')
 const POLYGON_RPC_HOST = process.env.POLYGON_RPC_HOST || "https://polygon-rpc.com/"
@@ -17,9 +18,14 @@ const GOTCHI_IDS = process.env.GOTCHI_IDS.split(",")
 const WHITELIST_ID = parseInt(process.env.WHITELIST_ID) || 0
 const OWNER_WALLET_ADDRESS = process.env.ORIGINAL_OWNER_WALLET_ADDRESS || LENDER_WALLET_ADDRESS
 const THIRD_PARTY_WALLET_ADDRESS = process.env.THIRD_PARTY_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000"
-const OWNER_SPLIT = parseFloat(process.env.OWNER_SPLIT) || 0
-const BORROWER_SPLIT = parseFloat(process.env.BORROWER_SPLIT) || 0
-const THIRD_PARTY_SPLIT = parseFloat(process.env.THIRD_PARTY_SPLIT) || 0
+// const OWNER_SPLIT = parseFloat(process.env.OWNER_SPLIT) || 0
+// const BORROWER_SPLIT = parseFloat(process.env.BORROWER_SPLIT) || 0
+// const THIRD_PARTY_SPLIT = parseFloat(process.env.THIRD_PARTY_SPLIT) || 0
+
+const OWNER_SPLIT = parseFloat(SHARES[0]) || 0
+const BORROWER_SPLIT = parseFloat(SHARES[1]) || 0
+const THIRD_PARTY_SPLIT = parseFloat(SHARES[2]) || 0
+
 const UPFRONT_COST_GHST = process.env.UPFRONT_COST || "0"
 const PERIOD_HRS = parseFloat(process.env.PERIOD_HRS)
 const PERIOD_SECS = PERIOD_HRS * 60 * 60
@@ -30,10 +36,33 @@ const ALCHEMICA_KEK_ADDRESS = '0x42E5E06EF5b90Fe15F853F59299Fc96259209c5C'
 const REVENUE_TOKENS = [ALCHEMICA_FUD_ADDRESS, ALCHEMICA_FOMO_ADDRESS, ALCHEMICA_ALPHA_ADDRESS, ALCHEMICA_KEK_ADDRESS]
 
 const MAX_LENDINGS = 999
+// Abort the operation if estimated gas exceeds this limit, specified in MATIC
+const GAS_COST_LIMIT_MATIC = GOTCHI_IDS.length * 0.05
 
-// const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 2 // 2 minutes
-const MILLISECONDS_BETWEEN_RETRIES = process.env.RELISTING_PERIOD_HRS * 60 * 60 * 1000
+const WEBHOOK_URL = process.env.WEBHOOK_URL
+const webhookClient = new WebhookClient({ url: WEBHOOK_URL });
 
+const MILLISECONDS_BETWEEN_RETRIES = 1000 * 20
+
+const sendDiscordMessage = (gotchiIds, operation) => {
+  gotchiIds = gotchiIds.split(',').join(', ')
+  // gotchiIds = gotchiIds.map(gotchiId => `[${gotchiId}]` + `(${FIREBALL_URL}${gotchiId})`)
+  const embed = new EmbedBuilder()
+    .setTitle("Owner: " + OWNER_WALLET_ADDRESS)
+    .setURL('https://www.aadventure.io/lending/manager?address=' + OWNER_WALLET_ADDRESS)
+    .addFields(
+      { name: 'Gottchi IDs:',
+      value: gotchiIds },
+      // { name: 'WHITELIST_ID', value: WHITELIST_ID },
+    )
+    .setColor(0x00FFFF);
+
+  webhookClient.send({
+    username: operation,
+    avatarURL: 'https://pbs.twimg.com/profile_images/1559524780402958336/EJoJy-nF_400x400.jpg',
+    embeds: [embed],
+  });
+}
 
 // cancel only mode - just cancel any current listings matching the config gotchi ids
 const CANCEL_ONLY = process.argv.includes('--cancel')
@@ -49,6 +78,10 @@ const OFFLINE_MODE = process.argv.includes('--offline')
 
 const getLogTimestamp = () => (new Date()).toISOString().substring(0,19)
 const log = (message) => console.log(`${getLogTimestamp()}: ${message}`)
+
+log(`Starting script with config: ${CONFIG}`)
+log(`Owner share: ${OWNER_SPLIT}, Bowrrower share: ${BORROWER_SPLIT}, Third party share: ${THIRD_PARTY_SPLIT}`)
+log(`Period hours: ${PERIOD_HRS}, Period seconds: ${PERIOD_SECS}`)
 
 const Web3 = require('web3')
 const web3 = new Web3(POLYGON_RPC_HOST)
@@ -212,9 +245,9 @@ const cancelGotchiLendings = (tokenIds) => submitTransaction(tokenIds, createCan
 
 const isGotchiIDOnLendingList = (id) => GOTCHI_IDS.includes(id)
 
-let gotchiIDsListedByScript = []
-const gotchiHasBeenListedByScript = (id) => gotchiIDsListedByScript.includes(id)
-const gotchiHasntBeenListedByScript = (id) => !gotchiHasBeenListedByScript(id)
+// let gotchiIDsListedByScript = []
+// const gotchiHasBeenListedByScript = (id) => gotchiIDsListedByScript.includes(id)
+// const gotchiHasntBeenListedByScript = (id) => !gotchiHasBeenListedByScript(id)
 
 const loop = async () => {
   log(`LENDER_WALLET_ADDRESS=${LENDER_WALLET_ADDRESS}`)
@@ -244,7 +277,7 @@ const loop = async () => {
   /**
    * Logging all expired listings.
    */
-  lendings.forEach((l)=>log(`tokenId=${l['erc721TokenId']}, timeAgreed=${l['timeAgreed']}, period=${l['period']}, expireTime=${parseInt(l['timeAgreed']) + parseInt(l['period'])}, now=${Math.floor(Date.now() / 1000)}, expired=${isLoanPeriodExpired(l)}`))
+  // lendings.forEach((l)=>log(`tokenId=${l['erc721TokenId']}, timeAgreed=${l['timeAgreed']}, period=${l['period']}, expireTime=${parseInt(l['timeAgreed']) + parseInt(l['period'])}, now=${Math.floor(Date.now() / 1000)}, expired=${isLoanPeriodExpired(l)}`))
   /**
    * Getting IDs of gotchis sitting in walled unlisted. Filtering from
    * all gotchis owned, excluding already listed gotchi IDs loaned gotchi IDs.
@@ -262,13 +295,14 @@ const loop = async () => {
    * List of gotchi IDs that hasn't been listed by script
    * and should be claimed and ended.
    */
-  const idsOfGotchisToClaimAndEnd = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList).filter(gotchiHasntBeenListedByScript)
-  log(`idsOfGotchisToClaimAndEnd=${idsOfGotchisToClaimAndEnd}`)
+  // const idsOfGotchisToClaimAndEnd = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList).filter(gotchiHasntBeenListedByScript)
+  // log(`idsOfGotchisToClaimAndEnd=${idsOfGotchisToClaimAndEnd}`)
   /**
    * List of gotchi IDs that has been listed by script
    * and should be relisted.
    */
-  const idsOfGotchisToRelist = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList).filter(gotchiHasBeenListedByScript)
+  const idsOfGotchisToRelist = idsOfGotchisWithLoanPeriodExpired.filter(isGotchiIDOnLendingList)
+  //.filter(gotchiHasBeenListedByScript)
   log(`idsOfGotchisToRelist=${idsOfGotchisToRelist}`)
 
   if (OFFLINE_MODE) {
@@ -291,15 +325,18 @@ const loop = async () => {
   if (!CANCEL_ONLY && !END_ONLY) {
     // list the unlisted gotchis
     if (idsOfGotchisToList.length > 0) {
-      listGotchiLendings(idsOfGotchisToList)
-      gotchiIDsListedByScript = gotchiIDsListedByScript.concat(idsOfGotchisToList)
+      // listGotchiLendings(idsOfGotchisToList)
+      sendDiscordMessage(`${idsOfGotchisToList}`, "Gotchi Listed")
+      // gotchiIDsListedByScript = gotchiIDsListedByScript.concat(idsOfGotchisToList)
     }
     // claim and end the gotchis the script hasn't listed
-    if (idsOfGotchisToClaimAndEnd.length > 0)
-      endGotchiLendings(idsOfGotchisToClaimAndEnd)
+    // if (idsOfGotchisToClaimAndEnd.length > 0)
+    //   endGotchiLendings(idsOfGotchisToClaimAndEnd)
     // relist the gotchis the script has listed previously
-    if (idsOfGotchisToRelist.length > 0)
-      relistGotchiLendings(idsOfGotchisToRelist)
+    if (idsOfGotchisToRelist.length > 0) {
+      // relistGotchiLendings(idsOfGotchisToRelist)
+      sendDiscordMessage(`${idsOfGotchisToRelist}`, "Gotchi Relisted")
+    }
   }
 
 }
